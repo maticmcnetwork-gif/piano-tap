@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Piano Tap">
+<meta name="theme-color" content="#0b0d1a">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Piano Tap</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d1a; overscroll-behavior: none;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif; }
+  body { position: fixed; inset: 0; width: 100%; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+  #safe { position: fixed; top: 0; left: 0; visibility: hidden; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  #hud { position: absolute; left: 0; right: 0; top: 0; padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 0; display: none; pointer-events: none; }
+  #score { display: none; text-align: center; font-size: 68px; font-weight: 800; color: #fff; line-height: 1;
+    text-shadow: 0 0 14px rgba(160,120,255,.9); }
+  #misses { position: absolute; left: 16px; top: calc(env(safe-area-inset-top, 0px) + 16px); display: none; pointer-events: none;
+    font-size: 22px; font-weight: 800; color: #ff6b7d; background: rgba(255,59,80,.16); border: 1px solid rgba(255,90,110,.55);
+    border-radius: 999px; padding: 6px 14px; }
+  #endBtn { position: absolute; right: 16px; top: calc(env(safe-area-inset-top, 0px) + 14px); display: none;
+    background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.28); border-radius: 999px;
+    padding: 10px 16px; font-size: 15px; font-weight: 700; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: radial-gradient(120% 80% at 50% 0%, #2a1a66 0%, #0b0d1a 62%); color: #fff; text-align: center;
+    padding: env(safe-area-inset-top, 0px) 24px env(safe-area-inset-bottom, 0px); }
+  .overlay.hidden { display: none; }
+  h1 { margin: 0 0 10px; font-size: 46px; letter-spacing: -1.5px; background: linear-gradient(90deg, #6fd3ff, #c58bff, #ff7aa8);
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .big { font-size: 92px; font-weight: 800; line-height: 1; text-shadow: 0 0 26px rgba(160,120,255,.8); }
+  .sub { opacity: .72; font-size: 15px; margin: 0; }
+  .red { color: #ff6b7d; font-weight: 700; margin: 0; }
+  button.m { width: min(320px, 100%); border: 0; border-radius: 20px; padding: 18px 16px; color: #fff; font-size: 20px; font-weight: 800;
+    box-shadow: 0 8px 28px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.35); }
+  button.m small { display: block; font-size: 13px; font-weight: 500; opacity: .88; margin-top: 4px; }
+  #bHard { background: linear-gradient(135deg, #ff4d6d, #ff8f5a); }
+  #bClassic { background: linear-gradient(135deg, #ff4d6d, #ff8f5a); }
+  #bExpert { background: linear-gradient(135deg, #c1121f, #ff2d95); }
+  #bBack { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); }
+  #bPrac { background: linear-gradient(135deg, #3d7bff, #9a5cff); }
+  #bAgain { background: #fff; color: #1a1040; }
+  #bMenu { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); }
+  button:active { transform: scale(.97); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="safe"></div>
+<div id="hud"><div id="score">0</div></div>
+<div id="misses">✕ 0</div>
+<button id="endBtn">Terminar</button>
+
+<div id="menu" class="overlay">
+  <h1>Piano Tap</h1>
+  <button class="m" id="bHard">Difícil<small>Un fallo y se acaba · 2 niveles</small></button>
+  <button class="m" id="bPrac">Práctica<small>Los fallos se cuentan en rojo</small></button>
+  <p class="sub" id="bests"></p>
+</div>
+
+<div id="sub" class="overlay hidden">
+  <h1>Difícil</h1>
+  <button class="m" id="bClassic">Clásico<small>Un fallo y se acaba</small></button>
+  <button class="m" id="bExpert">Experto<small>Más rápido, menos margen y más teclas</small></button>
+  <button class="m" id="bBack">Atrás</button>
+</div>
+
+<div id="over" class="overlay hidden">
+  <p class="sub" id="oTitle"></p>
+  <div class="big" id="oScore">0</div>
+  <p class="sub" id="oBest"></p>
+  <p class="red" id="oMiss"></p>
+  <button class="m" id="bAgain">Otra vez</button>
+  <button class="m" id="bMenu">Menú</button>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('c');
+  var ctx = cv.getContext('2d', { alpha: false });
+  var $ = function (id) { return document.getElementById(id); };
+  var W, H, RH, dpr, bgGrad, safeTop = 0, safeBottom = 0;
+  var state = 'menu', mode = 'hard';
+  // v0/k/cap: velocidad (filas/s) · rest: huecos vacíos · dbl: freno a filas dobles · singleAt: puntos desde los que solo hay 1 tecla por fila
+  // mx/my: margen de tolerancia del toque (fracción de columna / de fila)
+  var CFG = {
+    hard:     { v0: 2.0, k: 0.048, cap: 6.8, rest: 0.25, dbl: 0.75, singleAt: 100,  mx: 0.25, my: 0.6 },
+    practice: { v0: 2.0, k: 0.048, cap: 6.8, rest: 0.25, dbl: 0.75, singleAt: 100,  mx: 0.25, my: 0.6 },
+    expert:   { v0: 2.4, k: 0.060, cap: 8.0, rest: 0.10, dbl: 0.25, singleAt: 1e9,  mx: 0.12, my: 0.35 }
+  };
+  var C = CFG.hard;
+  var rows = [], score = 0, misses = 0, flashes = [], ripples = [], last = 0, queue = [], hist = [], hue = 0;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var rc = cv.getBoundingClientRect(); // tamaño REAL del lienzo en pantalla
+    W = rc.width || window.innerWidth; H = rc.height || window.innerHeight;
+    safeBottom = parseFloat(getComputedStyle($('safe')).paddingBottom) || 0;
+    RH = (H - safeBottom - 16) / 4;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    safeTop = parseFloat(getComputedStyle($('safe')).paddingTop) || 0;
+    bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#0b0d1a'); bgGrad.addColorStop(1, '#1b1146');
+  }
+  window.addEventListener('resize', resize); window.addEventListener('orientationchange', resize); window.addEventListener('load', resize); resize();
+
+  function best(m) { try { return +localStorage.getItem('pt_' + m) || 0; } catch (e) { return 0; } }
+  function setBest(m, v) { try { localStorage.setItem('pt_' + m, v); } catch (e) {} }
+  function showBests() { $('bests').textContent = 'Récords · Clásico: ' + best('hard') + ' · Experto: ' + best('expert') + ' · Práctica: ' + best('practice'); }
+  showBests();
+
+  // ---- Patrones: cada fila es una lista de columnas (1 o 2 teclas por fila) ----
+  var PATS = [
+    [0, [[0],[1],[2],[3]]], [0, [[0],[2],[1],[3]]], [0, [[1],[2],[1],[2]]], [0, [[0],[3],[1],[2]]],
+    [0, [[1],[0],[2],[3]]], [0, [[0],[1],[0],[2]]], [0, [[2],[2],[0],[1]]], [0, [[0],[1],[1],[3],[2]]],
+    [1, [[0,3],[1],[2]]], [1, [[1],[0,2],[3]]], [1, [[0,2],[1,3],[0,2]]], [1, [[1,2],[0],[3]]],
+    [1, [[0,1],[2],[3]]], [1, [[0],[1,3],[2],[1,3]]], [1, [[0],[1],[2,3],[1],[0]]],
+    [2, [[0],[1],[2],[3],[2],[1]]], [2, [[0,3],[1,2],[0,3]]], [2, [[0,2],[1],[2,3],[1],[0,3]]],
+    [2, [[1],[0,3],[2],[0,3],[1]]], [2, [[0],[1,2],[3],[1,2],[0]]], [2, [[0,1],[2,3],[0],[3],[1,2]]]
+  ];
+
+  function okSeq(seq) { // ninguna columna 3 filas seguidas
+    for (var i = 2; i < seq.length; i++)
+      for (var k = 0; k < seq[i].length; k++) {
+        var c = seq[i][k];
+        if (seq[i - 1].indexOf(c) > -1 && seq[i - 2].indexOf(c) > -1) return false;
+      }
+    return true;
+  }
+
+  function withRests(p, heavy) { // huecos vacíos entre filas cuando va muy rápido
+    var out = [];
+    p.forEach(function (r, i) { if (i > 0 && Math.random() < heavy * C.rest) out.push([]); out.push(r); });
+    return out;
+  }
+
+  function addPattern() {
+    var tier = score < 6 ? 0 : (score < 20 ? 1 : 2), pool = [];
+    var heavy = Math.min(1, Math.max(0, (score - 60) / 40)); // 0 a 1 entre 60 y 100 puntos
+    for (var i = 0; i < PATS.length; i++) if (PATS[i][0] <= tier) pool.push(PATS[i][1]);
+    if (score >= C.singleAt) pool = pool.filter(function (p) { return !p.some(function (r) { return r.length > 1; }); }); // solo 1 tecla por fila
+    for (var t = 0; t < 15; t++) {
+      var p = pool[Math.floor(Math.random() * pool.length)];
+      if (heavy > 0 && Math.random() < heavy * C.dbl && p.some(function (r) { return r.length > 1; })) continue;
+      if (Math.random() < 0.5) p = p.map(function (r) { return r.map(function (c) { return 3 - c; }); });
+      if (okSeq(hist.concat(p))) { queue = queue.concat(withRests(p, heavy)); hist = p.slice(-2); return; }
+    }
+    var cols = [0, 1, 2, 3].filter(function (c) { return !(hist.length > 1 && hist[0].indexOf(c) > -1 && hist[1].indexOf(c) > -1); });
+    var r = [cols[Math.floor(Math.random() * cols.length)]];
+    queue.push(r); hist = hist.concat([r]).slice(-2);
+  }
+
+  function newRow(y) {
+    if (!queue.length) addPattern();
+    hue = (hue + 9) % 360;
+    return { y: y, h: hue, col: 'hsl(' + hue + ',88%,60%)', glow: 'hsla(' + hue + ',95%,62%,.2)', t: queue.shift().map(function (c) { return { c: c, hit: false, miss: false, f: 0, ts: 0 }; }) };
+  }
+
+  function updMisses() { $('misses').textContent = '✕ ' + misses; }
+
+  function start(m) {
+    mode = m; C = CFG[m]; score = 0; misses = 0; flashes = []; ripples = []; rows = []; queue = []; hist = [];
+    hue = Math.floor(Math.random() * 360);
+    rows.push(newRow(-1)); // empieza arriba del todo, fuera de pantalla
+    updMisses();
+    $('hud').style.display = 'block';
+    $('misses').style.display = $('endBtn').style.display = (m === 'practice') ? 'block' : 'none';
+    $('menu').classList.add('hidden'); $('sub').classList.add('hidden'); $('over').classList.add('hidden');
+    state = 'play'; last = performance.now();
+  }
+
+  function finish(delay) {
+    if (state !== 'play') return;
+    state = 'ending';
+    setTimeout(function () {
+      state = 'over';
+      var key = mode;
+      var isNew = score > best(key);
+      if (isNew) setBest(key, score);
+      $('oTitle').textContent = mode === 'practice' ? 'Práctica terminada' : (mode === 'expert' ? 'Fin del juego · Experto' : 'Fin del juego');
+      $('oScore').textContent = score;
+      $('oBest').textContent = isNew && score > 0 ? '🎉 ¡Nuevo récord!' : 'Récord: ' + best(key);
+      $('oMiss').textContent = mode === 'practice' ? 'Fallos: ' + misses : '';
+      $('hud').style.display = $('misses').style.display = $('endBtn').style.display = 'none';
+      $('over').classList.remove('hidden'); showBests();
+    }, delay || 0);
+  }
+
+  function unhit(r) { return r.t.filter(function (k) { return !k.hit; }); }
+  function speed() { return Math.min(C.v0 + score * C.k, C.cap); } // filas por segundo
+
+  // Toques tolerantes: cada ficha acepta toques cerca de sus bordes (a los lados y arriba/abajo).
+  // Vale cualquier ficha visible; gana la más cercana al dedo. Un 2º toque sobre una ficha recién acertada se ignora.
+  function tap(cx, cy) {
+    if (state !== 'play') return;
+    var now = performance.now(), rc = cv.getBoundingClientRect();
+    cx -= rc.left; cy -= rc.top;
+    var cw = W / 4, MX = cw * C.mx, MY = RH * C.my;
+    var bestT = null, bestR = null, bestS = 1e9, recent = false, i, k;
+    for (i = 0; i < rows.length; i++) {
+      var r = rows[i], y0 = r.y * RH, y1 = y0 + RH;
+      var dy = cy < y0 ? y0 - cy : (cy > y1 ? cy - y1 : 0);
+      if (dy > MY) continue;
+      for (k = 0; k < r.t.length; k++) {
+        var q = r.t[k], x0 = q.c * cw, x1 = x0 + cw;
+        var dx = cx < x0 ? x0 - cx : (cx > x1 ? cx - x1 : 0);
+        if (dx > MX) continue;
+        if (q.hit) { if (now - q.ts < 280) recent = true; continue; }
+        var sc = dx / cw + dy / RH;
+        if (sc < bestS) { bestS = sc; bestT = q; bestR = r; }
+      }
+    }
+    if (bestT) {
+      bestT.hit = true; bestT.f = 1; bestT.ts = now; score++;
+      ripples.push({ x: (bestT.c + 0.5) * cw, y: cy, t: 1, h: bestR.h });
+      return;
+    }
+    if (recent) return;
+    var col = Math.min(3, Math.max(0, Math.floor(cx / cw)));
+    if (mode === 'practice') { misses++; updMisses(); return; }
+    flashes.push({ x: col * cw, y: Math.min(3, Math.max(0, Math.floor(cy / RH))) * RH, w: cw, h: RH, t: 1 });
+    finish(650);
+  }
+
+  // Se escuchan pointerdown Y touchstart (el que llegue primero cuenta; el duplicado se descarta)
+  var lx = -99, ly = -99, lt = 0;
+  function press(x, y) {
+    var n = performance.now();
+    if (n - lt < 45 && Math.abs(x - lx) < 16 && Math.abs(y - ly) < 16) return;
+    lx = x; ly = y; lt = n; tap(x, y);
+  }
+  cv.addEventListener('pointerdown', function (e) { e.preventDefault(); press(e.clientX, e.clientY); });
+  cv.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    for (var i = 0; i < e.changedTouches.length; i++) press(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+  }, { passive: false });
+
+  function update(dt) {
+    var v = speed();
+    for (var i = 0; i < rows.length; i++) rows[i].y += v * dt;
+    while (rows[rows.length - 1].y > -1) rows.push(newRow(rows[rows.length - 1].y - 1));
+    while (rows.length && rows[0].y >= 4) {
+      var r = rows.shift(), u = unhit(r);
+      if (!u.length) continue;
+      if (mode === 'practice') { misses += u.length; updMisses(); }
+      else {
+        u.forEach(function (q) { q.miss = true; flashes.push({ x: q.c * W / 4, y: 3 * RH, w: W / 4, h: RH, t: 1 }); });
+        rows.unshift(r); r.y = 3.999; finish(650); return;
+      }
+    }
+  }
+
+  function rr(x, y, w, h, rad) {
+    ctx.beginPath(); ctx.moveTo(x + rad, y); ctx.arcTo(x + w, y, x + w, y + h, rad); ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad); ctx.arcTo(x, y, x + w, y, rad); ctx.closePath();
+  }
+
+  function draw() {
+    var cw = W / 4, i, k, c;
+    ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,.028)';
+    ctx.fillRect(cw, 0, cw, H); ctx.fillRect(cw * 3, 0, cw, H);
+    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (c = 1; c < 4; c++) { ctx.moveTo(c * cw, 0); ctx.lineTo(c * cw, H); }
+    ctx.stroke();
+
+    for (i = 0; i < rows.length; i++) {
+      var r = rows[i], y = r.y * RH;
+      if (y > H || y + RH < 0) continue;
+      for (k = 0; k < r.t.length; k++) {
+        var q = r.t[k], x = q.c * cw + 4, w = cw - 8, ty = y + 4, h = RH - 8;
+        if (q.hit) {
+          ctx.fillStyle = q.f > 0 ? 'rgba(255,255,255,' + (0.1 + q.f * 0.8) + ')' : 'rgba(255,255,255,.05)';
+          rr(x, ty, w, h, 14); ctx.fill();
+          if (q.f > 0) q.f -= 0.09;
+          continue;
+        }
+        ctx.fillStyle = q.miss ? 'rgba(255,60,90,.25)' : r.glow;
+        rr(x - 4, ty - 4, w + 8, h + 8, 18); ctx.fill();                          // resplandor
+        ctx.fillStyle = q.miss ? '#e8304e' : r.col; rr(x, ty, w, h, 14); ctx.fill(); // cuerpo
+        ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 2; rr(x + 1, ty + 1, w - 2, h - 2, 13); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,.22)'; rr(x + 8, ty + 6, w - 16, h * 0.16, 7); ctx.fill(); // brillo
+      }
+    }
+
+    var by = RH * 4;
+    ctx.fillStyle = 'rgba(8,9,20,.88)'; ctx.fillRect(0, by, W, H - by);
+    ctx.fillStyle = 'rgba(160,120,255,.35)'; ctx.fillRect(0, by, W, 2);
+    for (i = ripples.length - 1; i >= 0; i--) {
+      var rp = ripples[i];
+      ctx.strokeStyle = 'hsla(' + rp.h + ',100%,80%,' + rp.t * 0.8 + ')'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(rp.x, rp.y, 12 + (1 - rp.t) * cw * 0.8, 0, 6.2832); ctx.stroke();
+      rp.t -= 0.07; if (rp.t <= 0) ripples.splice(i, 1);
+    }
+    for (i = flashes.length - 1; i >= 0; i--) {
+      var fl = flashes[i];
+      ctx.fillStyle = 'rgba(255,60,90,' + (0.25 + fl.t * 0.5) + ')'; ctx.fillRect(fl.x, fl.y, fl.w, fl.h);
+      fl.t -= 0.03; if (fl.t <= 0) flashes.splice(i, 1);
+    }
+    if (state === 'play' || state === 'ending') {
+      ctx.textAlign = 'center'; ctx.font = '800 68px -apple-system, system-ui, sans-serif'; ctx.lineJoin = 'round';
+      ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(11,13,26,.6)'; ctx.strokeText(score, W / 2, safeTop + 78);
+      ctx.fillStyle = '#fff'; ctx.fillText(score, W / 2, safeTop + 78);
+    }
+  }
+
+  function loop(now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (state === 'play') update(dt);
+    if (state !== 'menu') draw();
+    else { ctx.fillStyle = '#0b0d1a'; ctx.fillRect(0, 0, W, H); }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  $('bHard').onclick = function () { $('menu').classList.add('hidden'); $('sub').classList.remove('hidden'); };
+  $('bClassic').onclick = function () { start('hard'); };
+  $('bExpert').onclick = function () { start('expert'); };
+  $('bBack').onclick = function () { $('sub').classList.add('hidden'); $('menu').classList.remove('hidden'); };
+  $('bPrac').onclick = function () { start('practice'); };
+  $('bAgain').onclick = function () { start(mode); };
+  $('bMenu').onclick = function () { state = 'menu'; $('over').classList.add('hidden'); $('menu').classList.remove('hidden'); };
+  $('endBtn').addEventListener('touchstart', function (e) { e.stopPropagation(); }, { passive: true });
+  $('endBtn').addEventListener('click', function () { finish(0); });
+
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+  document.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
+})();
+</script>
+</body>
+</html>

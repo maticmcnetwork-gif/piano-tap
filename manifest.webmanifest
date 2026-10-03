@@ -1,0 +1,10 @@
+{
+  "name": "Piano Tap",
+  "short_name": "Piano Tap",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0d1a",
+  "theme_color": "#0b0d1a",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
+}
